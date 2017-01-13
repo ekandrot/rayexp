@@ -17,7 +17,7 @@
 #include <sys/time.h>
 #include <iostream>
 #include <SDL2/SDL.h>
-#include "../../ekclib/scheduler.h"
+#include "scheduler.h"
 
 SDL_Surface *surface;
 SDL_Surface *surfaceR;
