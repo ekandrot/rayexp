@@ -8,3 +8,5 @@ SDL2
 
 --- To Build ---
 make
+
+![example](example.png?raw=true "example ray traced stereoscopic image")
