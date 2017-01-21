@@ -16,6 +16,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <iostream>
+#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include "scheduler.h"
 
@@ -91,7 +92,6 @@ static void* test_func(void* param) {
             *(p->pixels + y * surface->pitch + x*4 +1 ) = c.green;
             *(p->pixels + y * surface->pitch + x*4 +2 ) = c.blue;
             *(p->pixels + y * surface->pitch + x*4 +3 ) = 255;
-//            p->pixels[x+y*WIDTH] = to_srgb(summingColor/sqr(SUBSAMPLING));
         }
     }
     return nullptr;
@@ -126,27 +126,16 @@ static int rand_range(int a, int b) {
 }
 
 
-static double get_wall_time(){
-    struct timeval time;
-    if (gettimeofday(&time,NULL)){
-        //  Handle error
-        return 0;
-    }
-    return (double)time.tv_sec + (double)time.tv_usec * .000001;
-}
-static double get_cpu_time(){
-    return (double)clock() / CLOCKS_PER_SEC;
-}
-
 
 int main(int argc, char** argv) {
-    #pragma unused(argc, argv)
+    srand(0);
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
     SDL_Texture *textureR;
     SDL_Event event;
 
+    SDL_SetMainReady();
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
         return 3;
@@ -159,28 +148,54 @@ int main(int argc, char** argv) {
                               SDL_WINDOW_RESIZABLE);
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
-    if (renderer == NULL) {
+    if (renderer == nullptr) {
         fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
         exit(1);
     }
     
+#if (SDL_MAJOR_VERSION > 2) || ((SDL_MAJOR_VERION ==2) && (SDL_MINOR_VERSION > 0) || (SDL_PATCHLEVEL >= 5))
     surface = SDL_CreateRGBSurfaceWithFormat(0, WIDTH, HEIGHT, 32, SDL_PIXELFORMAT_ABGR8888);
-    if (surface == NULL) {
+    if (surface == nullptr) {
         fprintf(stderr, "SDL_CreateRGBSurfaceWithFormat failed: %s\n", SDL_GetError());
         exit(1);
     }
     surfaceR = SDL_CreateRGBSurfaceWithFormat(0, WIDTH, HEIGHT, 32, SDL_PIXELFORMAT_ABGR8888);
-    if (surfaceR == NULL) {
+    if (surfaceR == nullptr) {
         fprintf(stderr, "SDL_CreateRGBSurfaceWithFormat failed: %s\n", SDL_GetError());
         exit(1);
     }
-    
+#else
+    Uint32 rmask, gmask, bmask, amask; 
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    rmask = 0xff000000;
+    gmask = 0x00ff0000;
+    bmask = 0x0000ff00;
+    amask = 0x000000ff;
+#else
+    rmask = 0x000000ff;
+    gmask = 0x0000ff00;
+    bmask = 0x00ff0000;
+    amask = 0xff000000;
+#endif
+
+    surface = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, rmask, gmask, bmask, amask);
+    if (surface == nullptr) {
+        fprintf(stderr, "SDL_CreateRGBSurface failed: %s\n", SDL_GetError());
+        exit(1);
+    }
+    surfaceR = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, rmask, gmask, bmask, amask);
+    if (surfaceR == nullptr) {
+        fprintf(stderr, "SDL_CreateRGBSurface failed: %s\n", SDL_GetError());
+        exit(1);
+    }
+
+#endif
     if (SDL_MUSTLOCK(surface)) {
         std::cout << "Surface must be locked..." << std::endl;
         exit(1);
     }
 
-    SDL_memset(surface->pixels, 0, surface->h * surface->pitch);
+    SDL_memset(surface->pixels, 128, surface->h * surface->pitch);
     texture = SDL_CreateTextureFromSurface(renderer, surface);
     if (texture == NULL) {
         fprintf(stderr, "CreateTextureFromSurface failed: %s\n", SDL_GetError());
@@ -192,13 +207,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "CreateTextureFromSurface failed: %s\n", SDL_GetError());
         exit(1);
     }
-
     
-    
-    
-    double wall0 = get_wall_time();
-    double cpu0  = get_cpu_time();
-
     world w;
     for (int i=0; i<100; ++i) {
         w.add_sphere(coord3(rand_range(-10,10)/10.0, rand_range(-10,10)/10.0, -rand_range(-10,10)/10.0),
@@ -215,7 +224,7 @@ int main(int argc, char** argv) {
     scheduler s(&image, surface->h*2);
     s.run();
     
-    SDL_Rect r;
+    SDL_Rect r={};
     r.w = WIDTH;
     r.h = HEIGHT;
 
@@ -245,89 +254,12 @@ int main(int argc, char** argv) {
         SDL_RenderPresent(renderer);
     }
     s.join();
-    double wall1 = get_wall_time();
-    double cpu1  = get_cpu_time();
-    
-    printf("raying took %f seconds to execute (wall) \n", wall1 - wall0);
-    printf("raying took %f seconds to execute (cpu) \n", cpu1 - cpu0);
 
     SDL_FreeSurface(surface);
     surface = NULL;
     
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
-
-    // 1 CPU
-    // raying took 3.151008 seconds to execute (wall)
-    // raying took 3.132381 seconds to execute (cpu)
-    // 2 CPUs
-    // raying took 1.557084 seconds to execute (wall)
-    // raying took 3.072881 seconds to execute (cpu)
-    // 3 CPUs
-    // raying took 1.456461 seconds to execute (wall)
-    // raying took 4.060603 seconds to execute (cpu)
-    // 4 CPUs
-    // raying took 1.431066 seconds to execute (wall)
-    // raying took 5.157500 seconds to execute (cpu)
-    // 4 CPUs, 4 units of work
-    // raying took 1.397816 seconds to execute (wall)
-    // raying took 5.112340 seconds to execute (cpu)
-    // 4 CPUs, Original code with 4 threads
-    // raying took 1.391767 seconds to execute (wall)
-    // raying took 5.130015 seconds to execute (cpu)
-
-
-#if 0
-    
-    unsigned concurentThreadsSupported = std::thread::hardware_concurrency();
-    if (concurentThreadsSupported <= 1) {
-        params_t params;
-        params.pixels = pixels;
-        params.w = &w;
-        params.startLine = 0;
-        params.endLine = HEIGHT;
-        test_func((void*)&params);
-    } else {
-        pthread_t* threads = new pthread_t[concurentThreadsSupported];
-        params_t *params = new params_t[concurentThreadsSupported];
-
-        for (unsigned i=0; i<concurentThreadsSupported; ++i) {
-            params[i].pixels = pixels;
-            params[i].w = &w;
-            params[i].startLine = i * HEIGHT / concurentThreadsSupported;
-            params[i].endLine = (i+1) * HEIGHT / concurentThreadsSupported;
-            int rc = pthread_create(&threads[i], NULL, test_func, (void *)&params[i]);
-            if (rc) {
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
-            }
-        }
-        
-        for (unsigned i=0; i<concurentThreadsSupported; ++i) {
-            pthread_join(threads[i], nullptr);
-        }
-        
-        delete [] params;
-        delete [] threads;
-    }
-    
-    double wall1 = get_wall_time();
-    double cpu1  = get_cpu_time();
-    
-    printf("raying took %f seconds to execute (wall) \n", wall1 - wall0);
-    printf("raying took %f seconds to execute (cpu) \n", cpu1 - cpu0);
-
-    // save it as a PNG for now
-    RGBBitmap bitmap;
-    bitmap.width = WIDTH;
-    bitmap.height = HEIGHT;
-    bitmap.bytewidth = HEIGHT * 3;
-    bitmap.bytes_per_pixel = 3;
-    bitmap.pixels = pixels;
-    int err = save_png_to_file(&bitmap, "ray0.png");
-    printf("Error code:  %d\n", err);
-    free(pixels);
-#endif
 
     return 0;
 }

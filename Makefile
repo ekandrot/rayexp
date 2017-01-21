@@ -1,6 +1,6 @@
 CC = g++
-COMPILER_FLAGS = `pkg-config libpng --cflags` -Wall -pthread -std=c++14 -c -O3
-LINKER_FLAGS = `pkg-config libpng --libs` -lSDL2
+COMPILER_FLAGS = `pkg-config libpng --cflags` `sdl2-config --cflags` -Wall -pthread -std=c++14 -c -O3
+LINKER_FLAGS = `pkg-config libpng --libs` `sdl2-config --libs` -lSDL2 -lpthread
 OBJS = ray.o world.o png_wrapper.o
 TARGET = rayexp
 
@@ -25,7 +25,7 @@ clean :
 	rm ${OBJS} ${TARGET}
 
 ${TARGET} :	$(OBJS)
-	$(CC) $(LINKER_FLAGS) $(OBJS) -o $@
+	$(CC) $(OBJS) $(LINKER_FLAGS) -o $@
 
 world.o : world.cpp world.h maths.h coords.h
 	$(CC) $< $(COMPILER_FLAGS) -o $@
